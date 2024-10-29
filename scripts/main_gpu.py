@@ -146,6 +146,7 @@ if __name__ == "__main__":
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(cumulative_world_coords)
     pcd = pcd.voxel_down_sample(voxel_size=0.02)
+    #o3d.visualization.draw_geometries([pcd])
     pcd, _ = pcd.remove_statistical_outlier(nb_neighbors=50, std_ratio=2.0)
     write_ply('output.ply', np.asarray(pcd.points))
     logging.info(f"Pointcloud filtering completed in {time.time() - filter_start:.2f} seconds")

@@ -33,29 +33,39 @@ def clear_folder(dir_path):
     else:
         logging.info(f"The folder {dir_path} does not exist.")
 
-def to_orthographic_projection(disparity, principal_point_distance):
+def to_orthographic_projection(depth, camera_height):
     """中心投影から正射投影への変換を適用する"""
-    rows, cols = disparity.shape
+    rows, cols = depth.shape
     mid_idx = cols // 2
-    col_indices = np.arange(cols)  
-    row_indices = np.arange(rows)[:, None]  
-    shift = (disparity * (mid_idx - col_indices) / (principal_point_distance + disparity)).astype(int)
-    new_col_indices = col_indices + shift
-    new_col_indices = np.clip(new_col_indices, 0, cols - 1)
-    shifted_disparity = np.zeros_like(disparity)
-    shifted_disparity[row_indices, new_col_indices] = disparity
-    return shifted_disparity
+    mid_idy = rows // 2
+    col_indices = np.vstack([np.arange(cols)] * rows)
+    row_indices = np.vstack([np.arange(rows)] * cols).transpose()
+    shift_x = np.where(
+        (depth > 23) | (depth < 0),
+        0,
+        ((camera_height - depth) * (mid_idx - col_indices) / camera_height).astype(int)
+    )
+    shift_y = np.where(
+        (depth > 23) | (depth < 0),
+        0,
+        ((camera_height - depth) * (mid_idy - row_indices) / camera_height).astype(int)
+    )
+    new_x = np.clip(col_indices + shift_x, 0, cols - 1)
+    new_y = np.clip(row_indices + shift_y, 0, rows - 1)
+    ortho_depth = np.full_like(depth, np.inf)
+    np.minimum.at(ortho_depth, (new_y, new_x), depth)
+    ortho_depth[ortho_depth == np.inf] = 0
+    return ortho_depth
 
-def depth_to_world(depth_map, K, R, T):
+def depth_to_world(depth_map, K, R, T, pixel_size):
     """深度マップをワールド座標に変換する"""
     height, width = depth_map.shape
     i, j = np.meshgrid(np.arange(width), np.arange(height), indexing='xy')
-    pixels_homogeneous = np.stack((i, j, np.ones_like(i)), axis=-1).reshape(-1, 3)
-    K_inv = np.linalg.inv(K)
-    camera_coords = (K_inv @ pixels_homogeneous.T).T * depth_map.reshape(-1, 1)
-    camera_coords = np.hstack((camera_coords, np.ones((camera_coords.shape[0], 1))))
-    RT = np.hstack((R, T.reshape(-1, 1)))
-    world_coords = (RT @ camera_coords.T).T[:, :3]
+    x_coords = (j - width // 2) * pixel_size
+    y_coords = (i - height // 2) * pixel_size
+    z_coords = camera_height - depth_map
+    local_coords = np.stack((x_coords, y_coords, z_coords), axis=-1).reshape(-1, 3)
+    world_coords = (R @ local_coords.T).T + T
     return world_coords
 
 def disparity_image(disparity, img_id):
@@ -132,10 +142,12 @@ if __name__ == "__main__":
 
     B, fov_v, height = 0.3, 60, 1440
     focal_length = height / (2 * np.tan(fov_v * np.pi / 180 / 2))
+    camera_height = 20
     cx, cy = 960, 720
     K = np.array([[focal_length, 0, cx], [0, focal_length, cy], [0, 0, 1]], dtype=np.float32)
     R = np.eye(3, dtype=np.float32)
-    principal_point_distance = B * focal_length / 20
+    scene_height = 2 * camera_height * np.tan(np.radians(fov_v) / 2)
+    pixel_size = scene_height / height
 
     drone_image_list = matching.read_file_list(DRONE_IMAGE_LOG)
     orb_slam_pose_list = matching.read_file_list(ORB_SLAM_LOG)
@@ -170,13 +182,13 @@ if __name__ == "__main__":
             continue
 
         disparity = create_disparity_image(left_image, right_image, i, window_size=5, min_disp=0, num_disp=80)
-        #disparity = to_orthographic_projection(disparity, principal_point_distance)
         if disparity is None:
             continue
 
         depth = B * focal_length / (disparity + 1e-6)
+        depth = to_orthographic_projection(depth, camera_height)
         depth[(depth < 0) | (depth > 23)] = 0
-        world_coords = grid_sampling(convert_right_to_left_hand_coordinates(depth_to_world(depth, K, R, T)))
+        world_coords = grid_sampling(convert_right_to_left_hand_coordinates(depth_to_world(depth, K, R, T, pixel_size)))
         
         if cumulative_world_coords is None:
             cumulative_world_coords = world_coords
@@ -190,10 +202,11 @@ if __name__ == "__main__":
     filter_start = time.time()
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(cumulative_world_coords)
+    #o3d.visualization.draw_geometries([pcd])
     pcd = pcd.voxel_down_sample(voxel_size=0.02)
     pcd, _ = pcd.remove_statistical_outlier(nb_neighbors=50, std_ratio=2.0)
     write_ply('output.ply', np.asarray(pcd.points))
-    #o3d.visualization.draw_geometries([pcd])
+    o3d.visualization.draw_geometries([pcd])
     logging.info(f"Pointcloud filtering completed in {time.time() - filter_start:.2f} seconds")
 
     total_time = time.time() - start_time
