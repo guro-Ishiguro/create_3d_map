@@ -8,14 +8,16 @@ import logging
 from sklearn.neighbors import NearestNeighbors
 import matching
 import time
+import config
+
 
 # ログ設定
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # ディレクトリパスの設定
-DRONE_IMAGE_DIR = "/home/geolab/Projects/create_3d_map/data/images/drone"
-DRONE_IMAGE_LOG = "/home/geolab/Projects/create_3d_map/data/txt/drone_image_log.txt"
-ORB_SLAM_LOG = "/home/geolab/Projects/create_3d_map/data/txt/KeyFrameTrajectory.txt"
+DRONE_IMAGE_DIR = os.path.join(config.IMAGE_DIR, "drone")
+DRONE_IMAGE_LOG = os.path.join(config.TXT_DIR, "drone_image_log.txt")
+ORB_SLAM_LOG = os.path.join(config.TXT_DIR, "KeyFrameTrajectory.txt")
 
 def clear_folder(dir_path):
     """指定フォルダの中身を削除する"""
