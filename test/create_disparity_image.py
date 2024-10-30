@@ -53,7 +53,7 @@ def save_disparity_colormap(disparity, output_path):
     print(f"Disparity colormap saved as {output_path}")
 
 # 左右の画像を読み込み
-img_id = 1001
+img_id = 100
 left_image = cv2.imread(os.path.join(DRONE_IMAGE_DIR, f"left_{img_id}.png"), cv2.IMREAD_GRAYSCALE)
 right_image = cv2.imread(os.path.join(DRONE_IMAGE_DIR, f"right_{img_id}.png"), cv2.IMREAD_GRAYSCALE)
 
@@ -64,7 +64,7 @@ camera_height = 20
 # 視差画像を生成
 disparity = create_disparity_image(left_image, right_image, window_size=5, min_disp=0, num_disp=80)
 
-disparity = to_orthographic_projection(disparity, camera_height)
+#disparity = to_orthographic_projection(disparity, camera_height)
 
 # 視差画像をカラーマップとして保存
 output_path = os.path.join(DISPARITY_IMAGE_DIR, f"disparity_{img_id}.png")

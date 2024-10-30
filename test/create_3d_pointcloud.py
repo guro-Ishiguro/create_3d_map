@@ -72,7 +72,7 @@ def save_depth_colormap(depth, output_path):
     print(f"Disparity colormap saved as {output_path}")
 
 # 左右の画像を読み込み
-img_id = 1100
+img_id = 300
 left_image = cv2.imread(os.path.join(DRONE_IMAGE_DIR, f"left_{img_id}.png"), cv2.IMREAD_GRAYSCALE)
 right_image = cv2.imread(os.path.join(DRONE_IMAGE_DIR, f"right_{img_id}.png"), cv2.IMREAD_GRAYSCALE)
 

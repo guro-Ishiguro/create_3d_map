@@ -61,7 +61,7 @@ def save_depth_colormap(depth, output_path):
     print(f"Disparity colormap saved as {output_path}")
 
 # 左右の画像を読み込み
-img_id = 1100
+img_id = 300
 left_image = cv2.imread(os.path.join(DRONE_IMAGE_DIR, f"left_{img_id}.png"), cv2.IMREAD_GRAYSCALE)
 right_image = cv2.imread(os.path.join(DRONE_IMAGE_DIR, f"right_{img_id}.png"), cv2.IMREAD_GRAYSCALE)
 
@@ -75,7 +75,7 @@ disparity = create_disparity_image(left_image, right_image, window_size=5, min_d
 # 深度画像を生成
 depth = B * focal_length / (disparity + 1e-6)
 depth[(depth < 0) | (depth > 23)] = 0
-#depth = to_orthographic_projection(depth, camera_height)
+depth = to_orthographic_projection(depth, camera_height)
 
 # 深度画像をカラーマップとして保存
 output_path = os.path.join(DEPTH_IMAGE_DIR, f"depth_{img_id}.png")
