@@ -19,6 +19,8 @@ DRONE_IMAGE_DIR = os.path.join(config.IMAGE_DIR, "drone")
 DRONE_IMAGE_LOG = os.path.join(config.TXT_DIR, "drone_image_log.txt")
 ORB_SLAM_LOG = os.path.join(config.TXT_DIR, "KeyFrameTrajectory.txt")
 
+SCALE = config.SCALE
+
 def clear_folder(dir_path):
     """指定フォルダの中身を削除する"""
     if os.path.exists(dir_path):
@@ -133,7 +135,7 @@ def display_neighbors(points, k=4):
     plt.legend()
     plt.savefig("figure.png")
 
-def grid_sampling(point_cloud, grid_size=0.1):
+def grid_sampling(point_cloud, grid_size):
     """三次元点群のグリッドサンプリングを行う"""
     rounded_coords = np.floor(point_cloud / grid_size).astype(int)
     _, unique_indices = np.unique(rounded_coords, axis=0, return_index=True)
@@ -192,7 +194,7 @@ if __name__ == "__main__":
         depth[(depth < 0) | (depth > 23)] = 0
         world_coords = convert_right_to_left_hand_coordinates(depth_to_world(depth, K, R, T, pixel_size))
         world_coords = world_coords[depth.reshape(-1) > 0]
-        world_coords = grid_sampling(world_coords)
+        world_coords = grid_sampling(world_coords, SCALE*0.1)
         
         if cumulative_world_coords is None:
             cumulative_world_coords = world_coords
@@ -206,7 +208,6 @@ if __name__ == "__main__":
     filter_start = time.time()
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(cumulative_world_coords)
-    #o3d.visualization.draw_geometries([pcd])
     pcd = pcd.voxel_down_sample(voxel_size=0.02)
     pcd, _ = pcd.remove_statistical_outlier(nb_neighbors=50, std_ratio=2.0)
     write_ply('output.ply', np.asarray(pcd.points))
