@@ -3,8 +3,9 @@ import cv2
 import numpy as np
 import open3d as o3d
 from matplotlib import pyplot as plt
+import config
 
-DRONE_IMAGE_DIR = "/home/geolab/Projects/create_3d_map/data/images/drone"
+DRONE_IMAGE_DIR = os.path.join(config.IMAGE_DIR, "drone")
 
 def create_disparity_image(image_L, image_R, window_size, min_disp, num_disp):
     """左・右画像から視差画像を生成する"""

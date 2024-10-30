@@ -2,9 +2,10 @@ import os
 import cv2
 import numpy as np
 from matplotlib import pyplot as plt
+import config
 
-DRONE_IMAGE_DIR = "/home/geolab/Projects/create_3d_map/data/images/drone"
-DEPTH_IMAGE_DIR = "/home/geolab/Projects/create_3d_map/data/images/depth"
+DRONE_IMAGE_DIR = os.path.join(config.IMAGE_DIR, "drone")
+DEPTH_IMAGE_DIR = os.path.join(config.IMAGE_DIR, "depth")
 
 def create_disparity_image(image_L, image_R, window_size, min_disp, num_disp):
     """左・右画像から視差画像を生成する"""
@@ -74,7 +75,7 @@ disparity = create_disparity_image(left_image, right_image, window_size=5, min_d
 # 深度画像を生成
 depth = B * focal_length / (disparity + 1e-6)
 depth[(depth < 0) | (depth > 23)] = 0
-depth = to_orthographic_projection(depth, camera_height)
+#depth = to_orthographic_projection(depth, camera_height)
 
 # 深度画像をカラーマップとして保存
 output_path = os.path.join(DEPTH_IMAGE_DIR, f"depth_{img_id}.png")
