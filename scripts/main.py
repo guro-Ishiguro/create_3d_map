@@ -173,7 +173,7 @@ if __name__ == "__main__":
         dx = float(matches[i][2][0])
         dy = float(matches[i][2][1])
         dz = float(matches[i][2][2])
-        T = np.array([dx, dy, dz], dtype=np.float32)
+        T = np.array([dy, dx, dz], dtype=np.float32)
         left_image = cv2.imread(os.path.join(DRONE_IMAGE_DIR, f"left_{img_id}.png"), cv2.IMREAD_GRAYSCALE)
         right_image = cv2.imread(os.path.join(DRONE_IMAGE_DIR, f"right_{img_id}.png"), cv2.IMREAD_GRAYSCALE)
         
@@ -188,7 +188,9 @@ if __name__ == "__main__":
         depth = B * focal_length / (disparity + 1e-6)
         depth = to_orthographic_projection(depth, camera_height)
         depth[(depth < 0) | (depth > 23)] = 0
-        world_coords = grid_sampling(convert_right_to_left_hand_coordinates(depth_to_world(depth, K, R, T, pixel_size)))
+        world_coords = convert_right_to_left_hand_coordinates(depth_to_world(depth, K, R, T, pixel_size))
+        world_coords = world_coords[depth.reshape(-1) > 0]
+        world_coords = grid_sampling(world_coords)
         
         if cumulative_world_coords is None:
             cumulative_world_coords = world_coords
