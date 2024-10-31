@@ -9,6 +9,8 @@ from sklearn.neighbors import NearestNeighbors
 import matching
 import time
 import config
+import argparse
+import viewer_utils
 
 
 # ログ設定
@@ -16,12 +18,25 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-# ディレクトリパスの設定
-DRONE_IMAGE_DIR = os.path.join(config.IMAGE_DIR, "drone")
-DRONE_IMAGE_LOG = os.path.join(config.TXT_DIR, "drone_image_log.txt")
-ORB_SLAM_LOG = os.path.join(config.TXT_DIR, "KeyFrameTrajectory.txt")
+# 録画の設定
+video_writer = None
+video_filename = os.path.join(config.VIDEO_DIR, "3d_map_visualization.avi")
+video_fps = 10 
+video_width, video_height = 640, 480
 
-SCALE = config.SCALE
+
+def parse_arguments():
+    """コマンド引数の値を受け取る"""
+    parser = argparse.ArgumentParser(description="3D Point Cloud Creater")
+    parser.add_argument(
+        "--show-viewer",
+        action="store_true",
+        help="Show viewer during point cloud generation.",
+    )
+    parser.add_argument(
+        "--record-video", action="store_true", help="Record viewer output to video."
+    )
+    return parser.parse_args()
 
 
 def clear_folder(dir_path):
@@ -72,7 +87,7 @@ def depth_to_world(depth_map, K, R, T, pixel_size):
     i, j = np.meshgrid(np.arange(width), np.arange(height), indexing="xy")
     x_coords = (j - width // 2) * pixel_size
     y_coords = (i - height // 2) * pixel_size
-    z_coords = camera_height - depth_map
+    z_coords = -(camera_height - depth_map)
     local_coords = np.stack((x_coords, y_coords, z_coords), axis=-1).reshape(-1, 3)
     world_coords = (R @ local_coords.T).T + T
     return world_coords
@@ -154,12 +169,29 @@ def grid_sampling(point_cloud, grid_size):
 
 
 if __name__ == "__main__":
+    args = parse_arguments()
+
+    logging.info(f"Image directory is {config.DRONE_IMAGE_DIR}")
+    logging.info(f"Show view flag is {args.show_viewer}")
+    logging.info(f"Video capture flag is {args.record_video}")
+
     start_time = time.time()
 
-    B, fov_v, height = 0.3, 60, 1440
+    viewer_recorder = None
+    if args.show_viewer:
+        viewer_recorder = viewer_utils.ViewerRecorder(
+            width=video_width,
+            height=video_height,
+            video_filename=video_filename,
+            fps=video_fps,
+            record_video=args.record_video
+        )
+    
+    SCALE = config.SCALE
+    B, fov_v, height = 0.3, 60, 1440 * SCALE
     focal_length = height / (2 * np.tan(fov_v * np.pi / 180 / 2))
     camera_height = 20
-    cx, cy = 960, 720
+    cx, cy = 960 * SCALE, 720 * SCALE
     K = np.array(
         [[focal_length, 0, cx], [0, focal_length, cy], [0, 0, 1]], dtype=np.float32
     )
@@ -167,8 +199,8 @@ if __name__ == "__main__":
     scene_height = 2 * camera_height * np.tan(np.radians(fov_v) / 2)
     pixel_size = scene_height / height
 
-    drone_image_list = matching.read_file_list(DRONE_IMAGE_LOG)
-    orb_slam_pose_list = matching.read_file_list(ORB_SLAM_LOG)
+    drone_image_list = matching.read_file_list(config.DRONE_IMAGE_LOG)
+    orb_slam_pose_list = matching.read_file_list(config.ORB_SLAM_LOG)
 
     # マッチング開始
     logging.info("Starting timestamp matching...")
@@ -195,10 +227,10 @@ if __name__ == "__main__":
         dz = float(matches[i][2][2])
         T = np.array([dy, dx, dz], dtype=np.float32)
         left_image = cv2.imread(
-            os.path.join(DRONE_IMAGE_DIR, f"left_{img_id}.png"), cv2.IMREAD_GRAYSCALE
+            os.path.join(config.DRONE_IMAGE_DIR, f"left_{img_id}.png"), cv2.IMREAD_GRAYSCALE
         )
         right_image = cv2.imread(
-            os.path.join(DRONE_IMAGE_DIR, f"right_{img_id}.png"), cv2.IMREAD_GRAYSCALE
+            os.path.join(config.DRONE_IMAGE_DIR, f"right_{img_id}.png"), cv2.IMREAD_GRAYSCALE
         )
 
         if left_image is None or right_image is None:
@@ -225,7 +257,16 @@ if __name__ == "__main__":
         else:
             cumulative_world_coords = np.vstack((cumulative_world_coords, world_coords))
 
+        if viewer_recorder:
+            viewer_recorder.update_viewer(cumulative_world_coords)
+
+    if viewer_recorder:
+        viewer_recorder.close()
+
     logging.info(f"3D map creation completed in {time.time() - map_start:.2f} seconds")
+    logging.info(
+        f"Number of points in the cumulative point cloud: {len(cumulative_world_coords)}"
+    )
 
     # PointCloudフィルタリング
     logging.info("Starting pointcloud filtering...")
@@ -234,11 +275,13 @@ if __name__ == "__main__":
     pcd.points = o3d.utility.Vector3dVector(cumulative_world_coords)
     pcd = pcd.voxel_down_sample(voxel_size=0.02)
     pcd, _ = pcd.remove_statistical_outlier(nb_neighbors=50, std_ratio=2.0)
-    write_ply("output.ply", np.asarray(pcd.points))
-    o3d.visualization.draw_geometries([pcd])
+    write_ply(POINT_CLOUD_FILE_PATH, np.asarray(pcd.points))
     logging.info(
         f"Pointcloud filtering completed in {time.time() - filter_start:.2f} seconds"
     )
-
     total_time = time.time() - start_time
     logging.info(f"Total processing time: {total_time:.2f} seconds")
+    logging.info(
+        f"Final number of points in the point cloud: {len(np.asarray(pcd.points))}"
+    )
+    o3d.visualization.draw_geometries([pcd])
